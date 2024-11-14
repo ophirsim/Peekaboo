@@ -1,0 +1,6 @@
+robosuite==1.1.0        # Robosuite library for robot simulation
+numpy>=1.21.0           # Numpy for numerical operations
+matplotlib>=3.4.0       # Matplotlib for rendering images
+pybullet==3.2.2         # PyBullet is used as the physics engine in Robosuite
+opencv-python-headless  # OpenCV for image processing (used in rendering)
+# Install MuJoCo on your own, library must be installed separately
