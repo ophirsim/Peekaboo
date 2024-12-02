@@ -61,11 +61,53 @@ class CustomLiftWithWall(Lift):
         tree_str = ET.tostring(self.model.mujoco_arena.worldbody, encoding='unicode', method='xml')
         print(tree_str)
 
+    # def randomize_camera(self, camera_name="robot0_eye_in_hand"):
+    #     """
+    #     Randomizes only the camera orientation (angle) while keeping the camera position fixed on the end-effector.
+    #     """
+    #     cam_id = self.sim.model.camera_name2id(camera_name)
+    #     # Get the initial camera orientation
+    #     initial_quat = self.sim.model.cam_quat[cam_id]
+    #     print(f"Initial camera orientation (quat): {initial_quat}")
+    #     # Randomize the camera angle (rotation around the X, Y, and Z axes)
+    #     random_quat = np.random.uniform(low=-np.pi, high=np.pi, size=4)  # Random quaternion
+    #     random_quat = random_quat / np.linalg.norm(random_quat)  # Normalize quaternion to make it valid
+    #     self.sim.model.cam_quat[cam_id] = random_quat
+    #     # Get the new camera orientation
+    #     new_quat = self.sim.model.cam_quat[cam_id]
+    #     print(f"New camera orientation (quat): {new_quat}")
+    def randomize_camera(self, camera_name="robot0_eye_in_hand"):
+        """
+        Randomizes the camera orientation (quaternion) while keeping the camera position fixed.
+        """
+        cam_id = self.sim.model.camera_name2id(camera_name)
+        
+        # Generate a random quaternion for camera orientation
+        random_quat = self.generate_random_unit_quaternion()
+        self.sim.model.cam_quat[cam_id] = random_quat
+
+        # Log the new camera quaternion for debugging
+        new_quat = self.sim.model.cam_quat[cam_id]
+        print(f"New randomized camera orientation (quat): {new_quat}")
+        self.sim.forward()
+
+    def generate_random_unit_quaternion(self):
+        """
+        Generates a random unit quaternion for 3D rotation.
+        """
+        u1, u2, u3 = np.random.uniform(0, 1, 3)
+        qx = np.sqrt(1 - u1) * np.sin(2 * np.pi * u2)
+        qy = np.sqrt(1 - u1) * np.cos(2 * np.pi * u2)
+        qz = np.sqrt(u1) * np.sin(2 * np.pi * u3)
+        qw = np.sqrt(u1) * np.cos(2 * np.pi * u3)
+        return np.array([qw, qx, qy, qz])
+
+
     def reset(self):
         super().reset()
 
         self.randomize_wall()
-        randomize_camera(self)
+        self.randomize_camera()
 
 def random_yaw_quaternion():
     """
@@ -78,22 +120,6 @@ def random_yaw_quaternion():
     qz = np.sin(yaw / 2)
     qw = np.cos(yaw / 2)
     return [qw, qx, qy, qz]
-
-def randomize_camera(env, camera_name="robot0_eye_in_hand"):
-    """
-    Randomizes only the camera orientation (angle) while keeping the camera position fixed on the end-effector.
-    """
-    cam_id = env.sim.model.camera_name2id(camera_name)
-    # Get the initial camera orientation
-    initial_quat = env.sim.model.cam_quat[cam_id]
-    print(f"Initial camera orientation (quat): {initial_quat}")
-    # Randomize the camera angle (rotation around the X, Y, and Z axes)
-    random_quat = np.random.uniform(low=-np.pi, high=np.pi, size=4)  # Random quaternion
-    random_quat = random_quat / np.linalg.norm(random_quat)  # Normalize quaternion to make it valid
-    env.sim.model.cam_quat[cam_id] = random_quat
-    # Get the new camera orientation
-    new_quat = env.sim.model.cam_quat[cam_id]
-    print(f"New camera orientation (quat): {new_quat}")
 
 
 def main():
@@ -126,7 +152,7 @@ def main():
     # Render the scene from camera of choice, I picked robot0_eye_in_hand for now
     # Available "camera" names = ('frontview', 'birdview', 'agentview', 'sideview', 'robot0_robotview', 'robot0_eye_in_hand')
     frame = env.sim.render(
-        width=640, height=480, camera_name="birdview"
+        width=640, height=480, camera_name="robot0_eye_in_hand"
     )
 
     # Display the rendered frame
