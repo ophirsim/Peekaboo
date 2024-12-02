@@ -16,6 +16,9 @@ class CustomLiftWithWall(Lift):
     def _load_model(self):
         super()._load_model()
 
+        self.randomize_wall()
+    
+    def randomize_wall(self):
         wall_size = np.random.uniform(low=[0.1, 0, 0.1], high=[0.2, 0.02, 0.2])  # Width, depth, height
 
         # Define a wall
@@ -60,13 +63,9 @@ class CustomLiftWithWall(Lift):
 
     def reset(self):
         super().reset()
-        '''
-        I DONT KNOW IF ANY OF THIS DOES ANYTHING SO I COMMENTED IT OUT
-        ''' 
-        # Set the wall's position after the environment is reset
-        # wall_body = self.sim.model.body_name2id("wall_main")
-        # self.sim.model.body_pos[wall_body] = [0.0, -0.3, 1.25]  # Adjusted position
-        # self.sim.forward()
+
+        self.randomize_wall()
+        randomize_camera(self)
 
 def random_yaw_quaternion():
     """
@@ -123,8 +122,6 @@ def main():
 
     # Reset the environment
     env.reset()
-    # Randomize camera position
-    randomize_camera(env)
 
     # Render the scene from camera of choice, I picked robot0_eye_in_hand for now
     # Available "camera" names = ('frontview', 'birdview', 'agentview', 'sideview', 'robot0_robotview', 'robot0_eye_in_hand')
