@@ -3,6 +3,7 @@ from robosuite.environments.manipulation.lift import Lift
 from robosuite.models.objects import BoxObject
 from robosuite.models.arenas import TableArena
 from robosuite.utils.mjcf_utils import array_to_string, new_joint
+from robosuite.utils.placement_samplers import UniformRandomSampler
 import numpy as np
 import matplotlib.pyplot as plt
 import xml.etree.ElementTree as ET  # For debugging
@@ -15,10 +16,7 @@ class CustomLiftWithWall(Lift):
     def _load_model(self):
         super()._load_model()
 
-        for body in self.model.mujoco_arena.worldbody.findall("body"):
-            print("Body name:", body.get("name"))
-
-        wall_size = np.random.uniform(low=[0.1, 0, 0.1], high=[0.25, 0.02, 0.25])  # Width, depth, height
+        wall_size = np.random.uniform(low=[0.1, 0, 0.1], high=[0.2, 0.02, 0.2])  # Width, depth, height
 
         # Define a wall
         self.wall = BoxObject(
@@ -37,7 +35,7 @@ class CustomLiftWithWall(Lift):
         table_pos = np.array([float(x) for x in table_pos.split()])  # Convert string to array
 
         # Get the Mujoco XML for the wall and place it in the worldbody but on the table
-        wall_offset = np.random.uniform(low=[-0.25, -0.25, 0.0], high=[0.25, 0.25, 0.0])
+        wall_offset = np.random.uniform(low=[-0.2, -0.2, 0.0], high=[0.2, 0.2, 0.0])
         wall_pos = table_pos + wall_offset  # Centered on table and offset in height
         wall_pos[2] += wall_size[2] / 2
         wall_xml = self.wall.get_obj()
@@ -66,10 +64,10 @@ class CustomLiftWithWall(Lift):
         I DONT KNOW IF ANY OF THIS DOES ANYTHING SO I COMMENTED IT OUT
         ''' 
         # Set the wall's position after the environment is reset
-        #wall_body = self.sim.model.body_name2id("wall_main")
-        #self.sim.model.body_pos[wall_body] = [0.0, -0.3, 1.25]  # Adjusted position
-        #self.sim.forward()
-    
+        # wall_body = self.sim.model.body_name2id("wall_main")
+        # self.sim.model.body_pos[wall_body] = [0.0, -0.3, 1.25]  # Adjusted position
+        # self.sim.forward()
+
 def random_yaw_quaternion():
     """
     Generates a quaternion for a random yaw rotation (rotation about the Z-axis only).
@@ -98,55 +96,28 @@ def randomize_camera(env, camera_name="robot0_eye_in_hand"):
     new_quat = env.sim.model.cam_quat[cam_id]
     print(f"New camera orientation (quat): {new_quat}")
 
-def randomize_cube(env, cube_name="cube_main", cube_geom_name="cube_g0", table_geom_name="table_collision"):
-    """
-    Randomizes the cube position on the table surface.
-    Ensures the cube remains on the table.
-    """
-    # Get table dimensions from the Mujoco model
-    table_geom_id = env.sim.model.geom_name2id(table_geom_name)
-    table_pos = env.sim.model.geom_pos[table_geom_id]
-    table_size = env.sim.model.geom_size[table_geom_id]
-
-    # Get cube dimensions
-    cube_geom_id = env.sim.model.geom_name2id(cube_geom_name)
-    cube_size = env.sim.model.geom_size[cube_geom_id]
-
-    # Compute valid ranges for cube's x and y positions
-    x_range = [
-        table_pos[0] - table_size[0] + cube_size[0],
-        table_pos[0] + table_size[0] - cube_size[0],
-    ]
-    y_range = [
-        table_pos[1] - table_size[1] + cube_size[1],
-        table_pos[1] + table_size[1] - cube_size[1],
-    ]
-
-    # Set cube's z position to ensure it rests on top of the table
-    z_position = table_pos[2] + table_size[2] + cube_size[2]
-
-    # Randomize x and y positions within valid ranges
-    x_position = np.random.uniform(*x_range)
-    y_position = np.random.uniform(*y_range)
-
-    # Set new position for the cube
-    cube_body_id = env.sim.model.body_name2id(cube_name)
-    new_pos = [x_position, y_position, z_position]
-    env.sim.model.body_pos[cube_body_id] = new_pos
-    env.sim.forward()
-
-    # Debugging: Print new cube position
-    print(table_pos, table_size, cube_size)
-    print(f"New cube position: {new_pos}")
-
 
 def main():
-    # Create the custom Lift environment with a wall
+    randomize_arm = False # flag to randomize arm
+    placement_initializer = UniformRandomSampler(
+        name="ObjectSampler",
+        x_range=[-0.3, 0.3],
+        y_range=[-0.3, 0.3],
+        rotation=None,
+        ensure_object_boundary_in_range=False,
+        ensure_valid_placement=True,
+        reference_pos=np.array((0, 0, 0.8)),
+        z_offset=0.01,
+    )
+
     env = CustomLiftWithWall(
         robots="Panda",
+        initialization_noise={'magnitude': 0.3 if randomize_arm else 0.0, 'type': 'uniform'},
         has_renderer=True,
         has_offscreen_renderer=True, #this shit always gives me an error when it's False
         use_camera_obs=False,
+        use_object_obs=True,
+        placement_initializer=placement_initializer,
         control_freq=20,
     )
 
@@ -154,8 +125,6 @@ def main():
     env.reset()
     # Randomize camera position
     randomize_camera(env)
-    # Randomize the cube position
-    randomize_cube_like_wall(env)
 
     # Render the scene from camera of choice, I picked robot0_eye_in_hand for now
     # Available "camera" names = ('frontview', 'birdview', 'agentview', 'sideview', 'robot0_robotview', 'robot0_eye_in_hand')
