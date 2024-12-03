@@ -61,21 +61,6 @@ class CustomLiftWithWall(Lift):
         tree_str = ET.tostring(self.model.mujoco_arena.worldbody, encoding='unicode', method='xml')
         print(tree_str)
 
-    # def randomize_camera(self, camera_name="robot0_eye_in_hand"):
-    #     """
-    #     Randomizes only the camera orientation (angle) while keeping the camera position fixed on the end-effector.
-    #     """
-    #     cam_id = self.sim.model.camera_name2id(camera_name)
-    #     # Get the initial camera orientation
-    #     initial_quat = self.sim.model.cam_quat[cam_id]
-    #     print(f"Initial camera orientation (quat): {initial_quat}")
-    #     # Randomize the camera angle (rotation around the X, Y, and Z axes)
-    #     random_quat = np.random.uniform(low=-np.pi, high=np.pi, size=4)  # Random quaternion
-    #     random_quat = random_quat / np.linalg.norm(random_quat)  # Normalize quaternion to make it valid
-    #     self.sim.model.cam_quat[cam_id] = random_quat
-    #     # Get the new camera orientation
-    #     new_quat = self.sim.model.cam_quat[cam_id]
-    #     print(f"New camera orientation (quat): {new_quat}")
     def randomize_camera(self, camera_name="robot0_eye_in_hand"):
         """
         Randomizes the camera orientation (quaternion) while keeping the camera position fixed.
@@ -85,10 +70,6 @@ class CustomLiftWithWall(Lift):
         # Generate a random quaternion for camera orientation
         random_quat = self.generate_random_unit_quaternion()
         self.sim.model.cam_quat[cam_id] = random_quat
-
-        # Log the new camera quaternion for debugging
-        new_quat = self.sim.model.cam_quat[cam_id]
-        print(f"New randomized camera orientation (quat): {new_quat}")
         self.sim.forward()
 
     def generate_random_unit_quaternion(self):
@@ -123,7 +104,7 @@ def random_yaw_quaternion():
 
 
 def main():
-    randomize_arm = False # flag to randomize arm
+    randomize_arm = True # flag to randomize arm
     placement_initializer = UniformRandomSampler(
         name="ObjectSampler",
         x_range=[-0.3, 0.3],
@@ -152,7 +133,7 @@ def main():
     # Render the scene from camera of choice, I picked robot0_eye_in_hand for now
     # Available "camera" names = ('frontview', 'birdview', 'agentview', 'sideview', 'robot0_robotview', 'robot0_eye_in_hand')
     frame = env.sim.render(
-        width=640, height=480, camera_name="robot0_eye_in_hand"
+        width=640, height=480, camera_name="birdview"
     )
 
     # Display the rendered frame
