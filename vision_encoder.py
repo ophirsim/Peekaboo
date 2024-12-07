@@ -11,11 +11,11 @@ class DINOv2FeatureExtractor(BaseFeaturesExtractor):
     Custom feature extractor using the pretrained DINOv2 base model from timm.
     This version includes preprocessing as part of the feature extractor.
     """
-    def __init__(self, observation_space, model_name= "hf_hub:timm/vit_small_patch14_dinov2.lvd142m", embed_dim=384):
+    def __init__(self, observation_space, model_name= "hf_hub:timm/vit_small_patch8_224.dino", embed_dim=384):
         super().__init__(observation_space, features_dim=embed_dim)
         
         # Load pretrained DINOv2 model
-        self.dino_model = timm.create_model("hf_hub:timm/vit_small_patch14_dinov2.lvd142m", pretrained=True, num_classes=0)
+        self.dino_model = timm.create_model("hf_hub:timm/vit_small_patch8_224.dino", pretrained=True, num_classes=0)
         # Freeze the model parameters
         for param in self.dino_model.parameters():
             param.requires_grad = False
@@ -29,9 +29,9 @@ class DINOv2FeatureExtractor(BaseFeaturesExtractor):
         Forward pass through the DINOv2 model.
         Assumes observations are raw images (batch of N, H, W, C).
         """
-        obs = observations.squeeze(0)[:196608]
-        obs = obs.reshape(256, 256, 3)
-        obs = obs.unsqueeze(0)
+        n = observations.shape[0]
+        obs = observations[:, :(224*224*3)]
+        obs = obs.reshape(n, 224, 224, 3)
         
         # Convert (N, H, W, C) to (N, C, H, W) for PyTorch
         obs = obs.permute(0, 3, 1, 2)

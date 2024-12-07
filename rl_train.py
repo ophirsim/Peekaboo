@@ -7,6 +7,7 @@ from stable_baselines3.common.monitor import Monitor
 from robosuite.wrappers.gym_wrapper import GymWrapper
 from robosuite.utils.placement_samplers import UniformRandomSampler
 from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.callbacks import CheckpointCallback
 from vision_encoder import DINOv2FeatureExtractor
 from randomized_env import CustomLiftWithWall
 
@@ -15,6 +16,9 @@ config = {
     "control_freq": 20,
     "reward_shaping": True,
     "reward_scale": 1.0,
+    "camera_names": "robot0_eye_in_hand",
+    "camera_heights": 224, 
+    "camera_widths": 224,
     "use_camera_obs": True,
     "use_object_obs": False,
     "ignore_done": True,
@@ -51,7 +55,7 @@ block_lifting_env = GymWrapper(env)
 #need to use the gymwrapper to be compatible with stable_baselines3
 #they have some check_env function to ensure that your environment is valid and compatible
 
-block_lifting_env = Monitor(block_lifting_env, "./training_logs/")
+block_lifting_env = Monitor(block_lifting_env)
 
 policy_kwargs = dict(
     features_extractor_class=DINOv2FeatureExtractor,
@@ -86,7 +90,7 @@ model = PPO(
     policy_kwargs=policy_kwargs,   # Policy arguments with feature extractor
     verbose=1,                     # Verbosity level
     learning_rate=3e-4,            # Learning rate for policy and value networks
-    n_steps=2048,                  # Number of steps per update (increase if episodes are long)
+    n_steps=1024,                  # Number of steps per update (increase if episodes are long)
     batch_size=256,                # Batch size for training
     gamma=0.99,                    # Discount factor
     gae_lambda=0.95,               # Generalized Advantage Estimation parameter
@@ -98,7 +102,14 @@ model = PPO(
     tensorboard_log="./ppo_tensorboard/",  # TensorBoard log directory
 )
 
-model.learn(total_timesteps=int(1e7), progress_bar = True)
+# Save a checkpoint every 100,000 timesteps
+checkpoint_callback = CheckpointCallback(
+    save_freq=100000,      # Save every 100,000 timesteps
+    save_path='./checkpoints/',  # Directory to save checkpoints
+    name_prefix='ppo_model'  # File name prefix
+)
 
-model_path = "./sac_model/model"
+model.learn(total_timesteps=int(1e6), progress_bar = True, callback=checkpoint_callback)
+
+model_path = "./ppo_model/model"
 model.save(model_path)

@@ -326,7 +326,7 @@ def main():
         )
 
         frame2 = env.sim.render(
-            width=256, height=256, camera_name="sideview"
+            width=256, height=256, camera_name="agentview"
         )
 
         frame3 = env.sim.render(
