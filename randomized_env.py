@@ -90,6 +90,15 @@ class CustomLiftWithWall(Lift):
         self.randomize_wall()
         self.randomize_camera()
 
+        observations = (
+            self.viewer._get_observations(force_update=True)
+            if self.viewer_get_obs
+            else self._get_observations(force_update=True)
+        )
+
+        # Return new observations
+        return observations
+
 def random_yaw_quaternion():
     """
     Generates a quaternion for a random yaw rotation (rotation about the Z-axis only).
