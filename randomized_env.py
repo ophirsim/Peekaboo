@@ -20,6 +20,7 @@ class CustomLiftWithWall(Lift):
     
     def randomize_wall(self):
         wall_size = np.random.uniform(low=[0.1, 0, 0.1], high=[0.2, 0.02, 0.2])  # Width, depth, height
+        self.wall_size = wall_size
 
         # Define a wall
         self.wall = BoxObject(
@@ -65,6 +66,7 @@ class CustomLiftWithWall(Lift):
         """
         Randomizes the camera orientation (quaternion) while keeping the camera position fixed.
         """
+        return # We don't actually need this, but now arm randomization is the only thing controling starting position of camera
         cam_id = self.sim.model.camera_name2id(camera_name)
         
         # Generate a random quaternion for camera orientation
@@ -98,6 +100,85 @@ class CustomLiftWithWall(Lift):
 
         # Return new observations
         return observations
+    
+    def unpack_env(self):
+        # Grab target cube position, size, and orientation
+        # then convert this information into 8 vertices
+        cube_pos = self.sim.data.body_xpos[self.sim.model.body_name2id(self.cube.root_body)] # (x, y, z) looking from arm pov (forward-back, left-right, up-down)
+        cube_quat = self.sim.data.body_xquat[self.sim.model.body_name2id(self.cube.root_body)]
+        bb = self.cube.get_bounding_box_half_size()
+
+        target_vertices = np.zeros((8, 3)) + cube_pos
+        i = 0
+        for x in [-bb[0], bb[0]]:
+            for y in [-bb[1], bb[1]]:
+                for z in [-bb[2], bb[2]]:
+                    target_vertices[i] += apply_quaternion_to_vector(np.array([x, y, z]), cube_quat)
+                    i += 1
+
+
+        # Grab wall position, size, and orientation
+        # then convert this information into 8 vertices
+        # lastly, convert the 8 vertices into 6 planes
+        wall = self.model.mujoco_arena.worldbody.find(f"body[@name='wall_main']")
+        wall_pos = np.array([float(x) for x in wall.get('pos').split()])
+        wall_quat = np.array([float(x) for x in wall.get('quat').split()])
+        wall_size = self.wall_size
+
+        wall_vertices = np.zeros((8, 3)) + wall_pos
+        i = 0
+        for x in [-wall_size[0], wall_size[0]]:
+            for y in [-wall_size[1], wall_size[1]]:
+                for z in [-wall_size[2], wall_size[2]]:
+                    wall_vertices[i] += apply_quaternion_to_vector(np.array([x, y, z]), wall_quat)
+                    i += 1
+
+        v1, v2, v3, v4, v5, v6, v7, v8 = wall_vertices
+        wall_planes = np.array([[v1, v2, v3, v4],
+                                [v5, v6, v7, v8],
+                                [v1, v2, v5, v6],
+                                [v3, v4, v7, v8],
+                                [v1, v3, v5, v7],
+                                [v2, v4, v6, v8]])
+        
+        # grab the camera position
+        cam_id = self.sim.model.camera_name2id("robot0_eye_in_hand")
+        camera_position = self.sim.data.cam_xpos[cam_id]
+
+
+        # grab the camera quaternion
+        camera_quat = self.sim.model.cam_quat[cam_id]
+
+
+        # grap the end effector rotation matrix, and apply it to the rotation frame of reference
+        eef_site_name = "gripper0_right_grip_site"
+        eef_site_id = self.sim.model.site_name2id(eef_site_name)
+        rotation_matrix = self.sim.data.site_xmat[eef_site_id].reshape(3, 3)
+        camera_vector = rotation_matrix @ np.array([0, 0, 1])
+
+
+        # Grab the field of view of the camera in the y-direction
+        # assume the x-direction field of view is the same
+        camera_bloom = np.array([self.sim.model.cam_fovy[cam_id]/2, self.sim.model.cam_fovy[cam_id]/2]) # defines rectangular pyramid in degrees (alpha, beta): (vertical, horizontal)
+
+        return target_vertices, wall_planes, camera_position, camera_vector, camera_bloom
+
+    def reward(self, action=None):
+        target_vertices, wall_planes, camera_position, camera_vector, camera_bloom = self.unpack_env()
+
+        # if any corner of the target cube is outside of frame, return 0
+        for target_vertex in target_vertices:
+            if not target_visible_in_conical_bloom(target_vertex, camera_position, camera_vector, camera_bloom):
+                return 0
+
+        # if any corner of the target cube is blocked by the wall, return 0
+        for target_vertex in target_vertices:
+            for wall_plane in wall_planes:
+                if line_segment_intersects_truncated_plane(target_vertex, camera_position, wall_plane):
+                    return 0
+            
+        # cube is entirely within bloom and is not obstructed
+        return 1
 
 def random_yaw_quaternion():
     """
@@ -110,6 +191,102 @@ def random_yaw_quaternion():
     qz = np.sin(yaw / 2)
     qw = np.cos(yaw / 2)
     return [qw, qx, qy, qz]
+
+
+def apply_quaternion_to_vector(vector, quaternion):
+    def hamilton(q1, q2):
+        w1, x1, y1, z1 = q1
+        w2, x2, y2, z2 = q2
+        return np.array([
+            w1*w2 - x1*x2 - y1*y2 - z1*z2,
+            w1*x2 + x1*w2 + y1*z2 - z1*y2,
+            w1*y2 - x1*z2 + y1*w2 + z1*x2,
+            w1*z2 + x1*y2 - y1*x2 + z1*w2
+        ])
+    
+    def inv_quaternion(quaternion):
+        w, x, y, z = quaternion
+        return np.array([w, -x, -y, -z])
+    
+    psuedo_vec = np.array([0, vector[-3], vector[-2], vector[-1]])
+    return hamilton(hamilton(quaternion, psuedo_vec), inv_quaternion(quaternion))[1:]
+
+
+def line_segment_intersects_truncated_plane(point1, point2, truncated_plane):
+    """
+    Boolean function to determine whether a line segment drawn between two points intersects a truncated rectangular plane defined by four points
+
+    Arguments:
+        point1: numpy array of shape (3,) corresponding to (x1, y1, z1)
+        point2: numpy array of shape (3,) corresponding to (x2, y2, z2)
+        truncated_plane: numpy array of shape (4, 3) corresponding to 4 points of a rectangular plane, each with 3 dimensions
+
+    Returns: True if line segment intersects the truncated rectangular plane, False otherwise
+    """
+
+    # calculate plane equation
+    A, B, C, D = truncated_plane
+    AB = A - B
+    AC = A - C
+    plane = np.cross(AB, AC)
+    k = -1 * np.sum(plane * D)
+
+    # calculate the line equation
+    x1, y1, z1 = point1
+    x2, y2, z2 = point2
+
+    line = np.array([[x1, y1, z1],
+                    [x2-x1, y2-y1, z2-z1]])
+    
+    intersection = np.sum(line * plane, axis=1)
+    intersection[0] += k
+
+    # line is parallel to plane, the plane does not obstruct the view
+    if intersection[1] == 0:
+        return False
+
+    t = -1 * intersection[0] / intersection[1]
+
+    # intersection occurs on line beyond line segment's endpoints, no occlusion
+    if t < 0 or t > 1:
+        return False
+
+    x_intersect = x1 + t * (x2 - x1)
+    y_intersect = y1 + t * (y2 - y1)
+    z_intersect = z1 + t * (z2 - z1)
+    intersect = np.array([x_intersect, y_intersect, z_intersect])
+
+    # if the intersection points lies within the truncated plane, return True, else return False
+    if (np.dot(AB, intersect) >= min(np.dot(AB, A), np.dot(AB, B)) and np.dot(AB, intersect) <= max(np.dot(AB, A), np.dot(AB, B)) and
+        np.dot(AC, intersect) >= min(np.dot(AC, A), np.dot(AC, C)) and np.dot(AC, intersect) <= max(np.dot(AC, A), np.dot(AC, C))):
+        return True
+    
+    return False
+
+
+def target_visible_in_conical_bloom(target_pos, camera_pos, camera_vec, camera_bloom):
+    """
+    Boolean function to determine whether a particular point falls within the conical bloom of the camera, given the camera's position, angle, and bloom
+
+    Arguments:
+        target_pos: numpy array of shape (3,) corresponding to (x1, y1, z1) of the target point
+        camera_pos: numpy array of shape (3,) corresponding to (x2, y2, z2) of the camera
+        camera_vec: numpy array of shape (3,) corresponding to (delta_x, delta_y, delta_z) of the direction vector of the camera
+        camera_bloom: numpy array of shape (2,) corresponding to (alpha, beta) the bloom in each dimension of the camera frame
+
+    Return: True if the target point is within the conical bloom of the camera, False otherwise
+
+    """
+    line_vec = target_pos - camera_pos
+    line_vec = line_vec / np.linalg.norm(line_vec)
+
+    camera_vec = camera_vec / np.linalg.norm(camera_vec)
+    angle_diff = np.rad2deg(np.arccos(np.clip(np.dot(camera_vec, line_vec), -1.0, 1.0))) # in degrees
+
+    if angle_diff <= np.min(camera_bloom):
+        return True
+    
+    return False
 
 
 def main():
@@ -137,19 +314,43 @@ def main():
     )
 
     # Reset the environment
-    env.reset()
+    for _ in range(10):
+        env.reset()
 
-    # Render the scene from camera of choice, I picked robot0_eye_in_hand for now
-    # Available "camera" names = ('frontview', 'birdview', 'agentview', 'sideview', 'robot0_robotview', 'robot0_eye_in_hand')
-    frame = env.sim.render(
-        width=640, height=480, camera_name="birdview"
-    )
+        print(env.reward())
 
-    # Display the rendered frame
-    plt.imshow(frame)
-    plt.axis("off")
-    plt.title("Randomized Camera View with Randomized Cube and Wall")
-    plt.show()
+        # Render the scene from camera of choice, I picked robot0_eye_in_hand for now
+        # Available "camera" names = ('frontview', 'birdview', 'agentview', 'sideview', 'robot0_robotview', 'robot0_eye_in_hand')
+        frame1 = env.sim.render(
+            width=256, height=256, camera_name="robot0_eye_in_hand"
+        )
+
+        frame2 = env.sim.render(
+            width=256, height=256, camera_name="sideview"
+        )
+
+        frame3 = env.sim.render(
+            width=256, height=256, camera_name="frontview"
+        )
+
+        frame4 = env.sim.render(
+            width=256, height=256, camera_name="birdview"
+        )
+
+        f, axarr = plt.subplots(2,2)
+        axarr[0,0].imshow(frame1, origin='lower')
+        axarr[0,0].axis("off")
+
+        axarr[0,1].imshow(frame2, origin='lower')
+        axarr[0,1].axis("off")
+
+        axarr[1,0].imshow(frame3, origin='lower')
+        axarr[1,0].axis("off")
+
+        axarr[1,1].imshow(frame4, origin='lower')
+        axarr[1,1].axis("off")
+
+        plt.show()
 
 if __name__ == "__main__":
     main()
