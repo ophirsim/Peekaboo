@@ -33,6 +33,7 @@ block_lifting_env = GymWrapper(env)
 model_path = "./sac_model/model"
 model = SAC.load(model_path, env=block_lifting_env)
 
+#look into evaluate policy function --> might have this built in, but idk abt visualization
 def visualize_rollout(env, model, num_episodes=1):
     for episode in range(num_episodes):
         obs = env.reset()

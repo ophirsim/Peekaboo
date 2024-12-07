@@ -2,10 +2,13 @@ import robosuite as suite
 import numpy as np
 import torch
 import stable_baselines3
-from stable_baselines3 import SAC
+from stable_baselines3 import SAC, PPO
+from stable_baselines3.common.monitor import Monitor
 from robosuite.wrappers.gym_wrapper import GymWrapper
+from robosuite.utils.placement_samplers import UniformRandomSampler
+from stable_baselines3.common.env_checker import check_env
 from vision_encoder import DINOv2FeatureExtractor
-
+from randomized_env import CustomLiftWithWall
 
 config = {
     "horizon": 500,
@@ -13,6 +16,7 @@ config = {
     "reward_shaping": True,
     "reward_scale": 1.0,
     "use_camera_obs": True,
+    "use_object_obs": False,
     "ignore_done": True,
     "hard_reset": False,
 }
@@ -22,10 +26,24 @@ config = {
 config["has_renderer"] = False
 config["has_offscreen_renderer"] = True
 
+randomize_arm = True # flag to randomize arm
+placement_initializer = UniformRandomSampler(
+    name="ObjectSampler",
+    x_range=[-0.3, 0.3],
+    y_range=[-0.3, 0.3],
+    rotation=None,
+    ensure_object_boundary_in_range=False,
+    ensure_valid_placement=True,
+    reference_pos=np.array((0, 0, 0.8)),
+    z_offset=0.01,
+)
+
 # Block Lifting
 env = suite.make(
-    env_name="Lift", 
+    env_name="CustomLiftWithWall", 
     robots="Panda",
+    initialization_noise={'magnitude': 0.3 if randomize_arm else 0.0, 'type': 'uniform'},
+    placement_initializer=placement_initializer,
     **config,
 )
 
@@ -33,12 +51,15 @@ block_lifting_env = GymWrapper(env)
 #need to use the gymwrapper to be compatible with stable_baselines3
 #they have some check_env function to ensure that your environment is valid and compatible
 
+block_lifting_env = Monitor(block_lifting_env, "./training_logs/")
+
 policy_kwargs = dict(
     features_extractor_class=DINOv2FeatureExtractor,
-    features_extractor_kwargs=dict(embed_dim=768),
-    net_arch=[256, 256] #might need to make bigger bc there are 768 features from dinov2
+    features_extractor_kwargs=dict(embed_dim=384),
+    net_arch=[256, 256] #might need to make bigger bc there are 384 features from dinov2 small
 )
 
+'''
 #need to figure out how exactly to set these training parameters
 model = SAC(
     'MlpPolicy',                   # Policy type
@@ -47,24 +68,35 @@ model = SAC(
     verbose=1,                     # Verbosity level
     gamma=0.99,                    # Discount factor
     learning_rate=3e-4,            # Learning rate for both policy and Q networks
-    buffer_size=1000000,           # Replay buffer size
+    buffer_size=100000,           # Replay buffer size
     batch_size=256,                # Batch size for training
     ent_coef='auto',               # Entropy coefficient (auto means it will be tuned)
     tau=0.005,                     # Soft target tau for target updates
     target_update_interval=1,      # Number of steps between target updates
     learning_starts=1000,          # Number of steps before training starts
-    gradient_steps=1000,           # Number of gradient steps per training step
-    train_freq=(5000, 'step'),     # Training frequency
+    gradient_steps=100,           # Number of gradient steps per training step
+    train_freq=(1000, 'step'),     # Training frequency
+    tensorboard_log="./sac_tensorboard/",
 )
-
-'''
-Using cuda device
-Wrapping the env with a `Monitor` wrapper
-Wrapping the env in a DummyVecEnv.
-
-this is the output that i get, might need to actually use a Monitor and VecEnv wrapper in the future
 '''
 
+model = PPO(
+    'MlpPolicy',                   # Policy type
+    block_lifting_env,             # Your custom environment
+    policy_kwargs=policy_kwargs,   # Policy arguments with feature extractor
+    verbose=1,                     # Verbosity level
+    learning_rate=3e-4,            # Learning rate for policy and value networks
+    n_steps=2048,                  # Number of steps per update (increase if episodes are long)
+    batch_size=256,                # Batch size for training
+    gamma=0.99,                    # Discount factor
+    gae_lambda=0.95,               # Generalized Advantage Estimation parameter
+    clip_range=0.2,                # PPO clipping parameter
+    ent_coef=0.01,                 # Entropy coefficient for exploration
+    vf_coef=0.5,                   # Value function coefficient in loss
+    max_grad_norm=0.5,             # Gradient clipping
+    n_epochs=10,                   # Number of epochs per update
+    tensorboard_log="./ppo_tensorboard/",  # TensorBoard log directory
+)
 
 model.learn(total_timesteps=int(1e7), progress_bar = True)
 
