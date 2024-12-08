@@ -8,6 +8,7 @@ from robosuite.wrappers.gym_wrapper import GymWrapper
 from robosuite.utils.placement_samplers import UniformRandomSampler
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import BaseCallback
 from vision_encoder import DINOv2FeatureExtractor
 from randomized_env import CustomLiftWithWall
 
@@ -55,7 +56,7 @@ block_lifting_env = GymWrapper(env)
 #need to use the gymwrapper to be compatible with stable_baselines3
 #they have some check_env function to ensure that your environment is valid and compatible
 
-block_lifting_env = Monitor(block_lifting_env)
+block_lifting_env = Monitor(block_lifting_env, "./training_logs/")
 
 policy_kwargs = dict(
     features_extractor_class=DINOv2FeatureExtractor,
@@ -99,6 +100,7 @@ model = PPO(
     vf_coef=0.5,                   # Value function coefficient in loss
     max_grad_norm=0.5,             # Gradient clipping
     n_epochs=10,                   # Number of epochs per update
+    stats_window_size=1,           
     tensorboard_log="./ppo_tensorboard/",  # TensorBoard log directory
 )
 
