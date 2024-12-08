@@ -12,6 +12,8 @@ import xml.etree.ElementTree as ET  # For debugging
 class CustomLiftWithWall(Lift):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.env_timesteps = 0
+        self.episode_reward = 0.0
 
     def _load_model(self):
         super()._load_model()
@@ -89,6 +91,11 @@ class CustomLiftWithWall(Lift):
     def reset(self):
         super().reset()
 
+        self.env_timesteps = 0
+        self.episode_reward = 0.0
+        
+        print("reset reset reset reset reset reset reset")
+
         self.randomize_wall()
         self.randomize_camera()
 
@@ -100,6 +107,25 @@ class CustomLiftWithWall(Lift):
 
         # Return new observations
         return observations
+    
+    def step(self, action):
+        obs, reward, done, info = super().step(action)
+
+        self.env_timesteps += 1
+        if self.env_timesteps >= 500:
+            done = True
+
+        self.episode_reward += reward
+        
+        #print(reward)
+        #print(self.episode_reward)
+        #print(done)
+        #print(info)
+
+        if done:
+            print("done done done done done done done done")
+
+        return obs, reward, done, info
     
     def unpack_env(self):
         # Grab target cube position, size, and orientation
@@ -169,16 +195,16 @@ class CustomLiftWithWall(Lift):
         # if any corner of the target cube is outside of frame, return 0
         for target_vertex in target_vertices:
             if not target_visible_in_conical_bloom(target_vertex, camera_position, camera_vector, camera_bloom):
-                return 0
+                return 0.0
 
         # if any corner of the target cube is blocked by the wall, return 0
         for target_vertex in target_vertices:
             for wall_plane in wall_planes:
                 if line_segment_intersects_truncated_plane(target_vertex, camera_position, wall_plane):
-                    return 0
+                    return 0.0
             
         # cube is entirely within bloom and is not obstructed
-        return 1
+        return 1.0
 
 def random_yaw_quaternion():
     """
