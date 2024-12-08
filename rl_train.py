@@ -102,7 +102,7 @@ model = PPO(
     vf_coef=0.5,                   # Value function coefficient in loss
     max_grad_norm=0.5,             # Gradient clipping
     n_epochs=10,                   # Number of epochs per update
-    stats_window_size=4,           
+    stats_window_size=2,           
     tensorboard_log="./ppo_tensorboard/",  # TensorBoard log directory
 )
 
