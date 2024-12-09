@@ -94,10 +94,10 @@ class CustomLiftWithWall(Lift):
         self.env_timesteps = 0
         self.episode_reward = 0.0
         
-        #print("reset reset reset reset reset reset reset")
+        print("reset reset reset reset reset reset reset")
 
-        #self.randomize_wall()
-        self.randomize_camera()
+        self.randomize_wall()
+        #self.randomize_camera()
 
         observations = (
             self.viewer._get_observations(force_update=True)
@@ -122,8 +122,8 @@ class CustomLiftWithWall(Lift):
         #print(done)
         #print(info)
 
-        #if done:
-            #print("done done done done done done done done")
+        if done:
+            print("done done done done done done done done")
 
         return obs, reward, done, info
     
