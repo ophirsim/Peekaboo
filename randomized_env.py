@@ -94,9 +94,9 @@ class CustomLiftWithWall(Lift):
         self.env_timesteps = 0
         self.episode_reward = 0.0
         
-        print("reset reset reset reset reset reset reset")
+        #print("reset reset reset reset reset reset reset")
 
-        self.randomize_wall()
+        #self.randomize_wall()
         self.randomize_camera()
 
         observations = (
@@ -122,8 +122,8 @@ class CustomLiftWithWall(Lift):
         #print(done)
         #print(info)
 
-        if done:
-            print("done done done done done done done done")
+        #if done:
+            #print("done done done done done done done done")
 
         return obs, reward, done, info
     
@@ -316,7 +316,7 @@ def target_visible_in_conical_bloom(target_pos, camera_pos, camera_vec, camera_b
 
 
 def main():
-    randomize_arm = True # flag to randomize arm
+    randomize_arm = False # flag to randomize arm
     placement_initializer = UniformRandomSampler(
         name="ObjectSampler",
         x_range=[-0.3, 0.3],

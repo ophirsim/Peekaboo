@@ -32,7 +32,7 @@ config = {
 config["has_renderer"] = False
 config["has_offscreen_renderer"] = True
 
-randomize_arm = True # flag to randomize arm
+randomize_arm = False # flag to randomize arm
 placement_initializer = UniformRandomSampler(
     name="ObjectSampler",
     x_range=[-0.3, 0.3],
@@ -98,7 +98,7 @@ model = PPO(
     gamma=0.99,                    # Discount factor
     gae_lambda=0.95,               # Generalized Advantage Estimation parameter
     clip_range=0.2,                # PPO clipping parameter
-    ent_coef=0.01,                 # Entropy coefficient for exploration
+    #ent_coef=0.01,                 # Entropy coefficient for exploration
     vf_coef=0.5,                   # Value function coefficient in loss
     max_grad_norm=0.5,             # Gradient clipping
     n_epochs=10,                   # Number of epochs per update
