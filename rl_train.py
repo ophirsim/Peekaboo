@@ -32,7 +32,7 @@ config = {
 config["has_renderer"] = False
 config["has_offscreen_renderer"] = True
 
-randomize_arm = False # flag to randomize arm
+randomize_arm = True # flag to randomize arm
 placement_initializer = UniformRandomSampler(
     name="ObjectSampler",
     x_range=[-0.3, 0.3],
@@ -106,14 +106,17 @@ model = PPO(
     tensorboard_log="./ppo_tensorboard/",  # TensorBoard log directory
 )
 
+model_path = "./full_randomization_training/checkpoints/ppo_model_180000_steps"
+model = PPO.load(model_path, env=block_lifting_env)
+
 # Save a checkpoint every 100,000 timesteps
 checkpoint_callback = CheckpointCallback(
-    save_freq=20000,      # Save every 100,000 timesteps
+    save_freq=100000,      # Save every 100,000 timesteps
     save_path='./checkpoints/',  # Directory to save checkpoints
     name_prefix='ppo_model'  # File name prefix
 )
 
-model.learn(total_timesteps=int(200000), progress_bar = True, callback=checkpoint_callback)
+model.learn(total_timesteps=int(820000), progress_bar = True, callback=checkpoint_callback)
 
 model_path = "./ppo_model/model"
 model.save(model_path)

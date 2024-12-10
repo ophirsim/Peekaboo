@@ -97,7 +97,7 @@ class CustomLiftWithWall(Lift):
         print("reset reset reset reset reset reset reset")
 
         self.randomize_wall()
-        #self.randomize_camera()
+        self.randomize_camera()
 
         observations = (
             self.viewer._get_observations(force_update=True)
